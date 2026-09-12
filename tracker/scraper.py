@@ -24,8 +24,6 @@ HEADERS = {
 def to_buytickets_url(url: str, target_date: Optional[Union[str, date, datetime]] = None) -> tuple[str, str]:
     """Converts any BMS link to the canonical /buytickets/{slug}-{city}/movie-{city}-{event_code}-MT/{date_str} URL."""
     clean_url = url.strip().split("?")[0].rstrip("/")
-
-    # Resolve date string to YYYYMMDD
     if target_date:
         if isinstance(target_date, (date, datetime)):
             date_str = target_date.strftime("%Y%m%d")
@@ -34,14 +32,14 @@ def to_buytickets_url(url: str, target_date: Optional[Union[str, date, datetime]
     else:
         date_str = date.today().strftime("%Y%m%d")
 
-    # Case 1: Standard synopsis URL (/movies/city/slug/event_code)
+    #Standard synopsis URL (/movies/city/slug/event_code)
     synopsis_pattern = r"bookmyshow\.com/movies/([^/]+)/([^/]+)(?:/buytickets)?/([A-Z0-9]+)"
     match = re.search(synopsis_pattern, clean_url, re.IGNORECASE)
     if match:
         city, slug, event_code = match.group(1), match.group(2), match.group(3)
         return f"https://in.bookmyshow.com/buytickets/{slug}-{city}/movie-{city}-{event_code}-MT/{date_str}", date_str
 
-    # Case 2: Direct /buytickets/ URL
+    #Direct /buytickets/ URL
     if "/buytickets/" in clean_url:
         parts = clean_url.split("/")
         if parts[-1].isdigit() and len(parts[-1]) == 8:
@@ -71,12 +69,9 @@ def check_bms_availability(
         if date_str not in final_url and not final_url.endswith(date_str):
             print(f"[-] BMS redirected away from {date_str}. Booking not open for this date.")
             return False, [], target_url
-
         html = response.text
 
-        # ----------------------------------------------------
         # STRATEGY 1: Parse Embedded Next.js / Initial State
-        # ----------------------------------------------------
         json_matches = re.findall(r'<script[^>]*>(.*?)</script>', html, re.DOTALL)
         for script_body in json_matches:
             if '{"props":' in script_body or 'window.__INITIAL_STATE__' in script_body:
@@ -85,11 +80,9 @@ def check_bms_availability(
                     assign_match = re.search(r'window\.__INITIAL_STATE__\s*=\s*(\{.*?\});?', script_body, re.DOTALL)
                     if assign_match:
                         json_text = assign_match.group(1)
-
                 try:
                     data = json.loads(json_text)
                     valid_venues = []
-
                     def scan_venues(node):
                         if isinstance(node, dict):
                             # Check for venue identity
@@ -114,16 +107,12 @@ def check_bms_availability(
                                 # Ensure shows contain items
                                 if not theatre_filter or theatre_filter.lower() in str(venue_name).lower():
                                     valid_venues.append(str(venue_name))
-
                             for v in node.values():
                                 scan_venues(v)
-
                         elif isinstance(node, list):
                             for item in node:
                                 scan_venues(item)
-
                     scan_venues(data)
-
                     if valid_venues:
                         unique_venues = list(set(valid_venues))
                         print(f"[+] Confirmed {len(unique_venues)} live venue(s): {unique_venues}")
@@ -131,10 +120,8 @@ def check_bms_availability(
 
                 except (json.JSONDecodeError, Exception):
                     continue
-
-        # ----------------------------------------------------
         # STRATEGY 2: Resilient HTML Markup & Showtime Parsing
-        # ----------------------------------------------------
+
         has_time_pill = bool(re.search(r'(?:showtime-pill|btn-showtime|showtime-cell|__showtime)', html, re.IGNORECASE))
         has_time_string = bool(re.search(r'\b\d{1,2}:\d{2}\s*(?:AM|PM)\b', html, re.IGNORECASE))
         has_pricing_or_session = bool(re.search(r'data-session-id|data-show-time|data-cut-off|price-list|avail-status', html, re.IGNORECASE))
