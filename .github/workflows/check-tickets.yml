@@ -1,0 +1,47 @@
+name: Check BMS ticket alerts
+
+on:
+  schedule:
+    # GitHub's minimum interval is 5 minutes; schedules can also lag a few
+    # minutes under load, so treat this as "roughly every 5 minutes".
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}   # lets you trigger a manual run from the Actions tab
+
+permissions:
+  contents: write   # needed so the workflow can commit alerts.json back
+
+jobs:
+  check-alerts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run alert check
+        env:
+          EMAIL_HOST: ${{ secrets.EMAIL_HOST }}
+          EMAIL_PORT: ${{ secrets.EMAIL_PORT }}
+          EMAIL_HOST_USER: ${{ secrets.EMAIL_HOST_USER }}
+          EMAIL_HOST_PASSWORD: ${{ secrets.EMAIL_HOST_PASSWORD }}
+          DEFAULT_FROM_EMAIL: ${{ secrets.DEFAULT_FROM_EMAIL }}
+        run: python scripts/check_alerts.py
+
+      - name: Commit alerts.json if it changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet -- alerts.json; then
+            git add alerts.json
+            git commit -m "Update alerts.json after check run"
+            git push
+          else
+            echo "No changes to alerts.json"
+          fi
